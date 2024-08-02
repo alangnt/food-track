@@ -1,16 +1,19 @@
 "use client"
 
 import { Box, Button, Grid } from "@mui/material";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export default function Gallery() {
     const [images, setImages] = useState<string[]>([]);
     const [isCameraActive, setIsCameraActive] = useState(false);
+    const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
     const videoRef = useRef<HTMLVideoElement>(null);
 
     const startCamera = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: facingMode } 
+            });
             if (videoRef.current) {
                 videoRef.current.srcObject = stream;
             }
@@ -42,6 +45,17 @@ export default function Gallery() {
         }
     };
 
+    const flipCamera = () => {
+        setFacingMode(prevMode => prevMode === 'user' ? 'environment' : 'user');
+    };
+
+    useEffect(() => {
+        if (isCameraActive) {
+            stopCamera();
+            startCamera();
+        }
+    }, [facingMode]);
+
     return (
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
             <h1>Gallery</h1>
@@ -49,8 +63,13 @@ export default function Gallery() {
 
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                 <video ref={videoRef} autoPlay playsInline style={{ display: "block", marginTop: "1rem" }} />
-                {isCameraActive && <Button onClick={captureImage} style={{ marginTop: "1rem" }}>Take Picture</Button>}
-                {isCameraActive && <Button onClick={stopCamera}>Stop Camera</Button>}
+                {isCameraActive && (
+                    <>
+                        <Button onClick={captureImage} style={{ marginTop: "1rem" }}>Take Picture</Button>
+                        <Button onClick={flipCamera}>Flip Camera</Button>
+                        <Button onClick={stopCamera}>Stop Camera</Button>
+                    </>
+                )}
             </Box>
             
             <Grid container spacing={2} sx={{ marginTop: "1rem" }}>
