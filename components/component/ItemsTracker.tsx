@@ -10,28 +10,35 @@ export default function ItemsTracker() {
     const [newItem, setNewItem] = useState("");
     const [selectedItem, setSelectedItem] = useState<string | null>(null);
     const [itemValues, setItemValues] = useState<{ [key: string]: number }>({});
+    const [collectionName, setCollectionName] = useState("items");
 
     useEffect(() => {
         const fetchItems = async () => {
             try {
-                const itemsCollection = collection(db, "items");
+                const itemsCollection = collection(db, collectionName);
                 const itemsSnapshot = await getDocs(itemsCollection);
                 const itemsList: string[] = [];
                 const itemValuesList: { [key: string]: number } = {};
-                itemsSnapshot.docs.forEach(doc => {
-                    const data = doc.data();
-                    itemsList.push(data.name);
-                    itemValuesList[data.name] = data.value || 0;
-                });
+        
+                if (itemsSnapshot.empty) {
+                    console.log(`The ${collectionName} collection is empty`);
+                } else {
+                    itemsSnapshot.docs.forEach(doc => {
+                        const data = doc.data();
+                        itemsList.push(data.name);
+                        itemValuesList[data.name] = data.value || 1;
+                    });
+                }
+        
                 setItems(itemsList);
                 setItemValues(itemValuesList);
             } catch (error) {
-                console.error("Error fetching items:", error);
+                console.error(`Error fetching items from ${collectionName} collection:`, error);
             }
         };
 
         fetchItems();
-    }, []);
+    }, [collectionName]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setNewItem(e.target.value);
@@ -42,18 +49,18 @@ export default function ItemsTracker() {
             console.log("Item is empty");
             return;
         }
-
+    
         if (!items.includes(newItem)) {
             try {
-                await setDoc(doc(db, "items", newItem), { name: newItem, value: 0 });
+                await setDoc(doc(db, collectionName, newItem), { name: newItem, value: 1 });
                 setItems([...items, newItem]);
-                setItemValues({ ...itemValues, [newItem]: 0 });
+                setItemValues({ ...itemValues, [newItem]: 1 });
                 setNewItem("");
             } catch (error) {
-                console.error("Error adding item:", error);
+                console.error(`Error adding item to ${collectionName} collection:`, error);
             }
         } else {
-            console.log("Item already exists");
+            console.log(`Item already exists in ${collectionName} collection`);
         }
     };
 
@@ -65,7 +72,7 @@ export default function ItemsTracker() {
     const handleRemoveItem = async () => {
         if (selectedItem) {
             try {
-                await deleteDoc(doc(db, "items", selectedItem));
+                await deleteDoc(doc(db, collectionName, selectedItem));
                 setItems(items.filter(item => item !== selectedItem));
                 const newItemValues = { ...itemValues };
                 delete newItemValues[selectedItem];
@@ -73,7 +80,7 @@ export default function ItemsTracker() {
                 setNewItem("");
                 setSelectedItem(null);
             } catch (error) {
-                console.error("Error removing item:", error);
+                console.error(`Error removing item from ${collectionName} collection:`, error);
             }
         }
     };
@@ -81,27 +88,27 @@ export default function ItemsTracker() {
     const handleAddValue = async (item: string) => {
         try {
             const newValue = (itemValues[item] || 0) + 1;
-            await updateDoc(doc(db, "items", item), { value: newValue });
+            await updateDoc(doc(db, collectionName, item), { value: newValue });
             setItemValues({ ...itemValues, [item]: newValue });
         } catch (error) {
-            console.error("Error updating item value:", error);
+            console.error(`Error updating item value in ${collectionName} collection:`, error);
         }
     };
-
+    
     const handleRemoveValue = async (item: string) => {
         try {
             const newValue = Math.max((itemValues[item] || 0) - 1, 0);
-            await updateDoc(doc(db, "items", item), { value: newValue });
+            await updateDoc(doc(db, collectionName, item), { value: newValue });
             setItemValues({ ...itemValues, [item]: newValue });
         } catch (error) {
-            console.error("Error updating item value:", error);
+            console.error(`Error updating item value in ${collectionName} collection:`, error);
         }
     };
 
     return (
         <Box sx={{ width: "100%", height: "60vh", padding: "1rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
             <Typography variant="h2" sx={{ textAlign: "center", fontSize: "2rem" }}>
-                Items list
+                <Input type="text" value={collectionName} onChange={(e) => setCollectionName(e.target.value)} />
             </Typography>
 
             <Box sx={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
