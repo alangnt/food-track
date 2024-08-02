@@ -98,15 +98,25 @@ export default function ItemsTracker() {
     const handleRemoveValue = async (item: string) => {
         try {
             const newValue = Math.max((itemValues[item] || 0) - 1, 0);
-            await updateDoc(doc(db, collectionName, item), { value: newValue });
-            setItemValues({ ...itemValues, [item]: newValue });
+            if (newValue === 0) {
+                // Remove the item if its value reaches 0
+                await deleteDoc(doc(db, collectionName, item));
+                setItems(items.filter(i => i !== item));
+                const newItemValues = { ...itemValues };
+                delete newItemValues[item];
+                setItemValues(newItemValues);
+            } else {
+                // Update the item's value if it's greater than 0
+                await updateDoc(doc(db, collectionName, item), { value: newValue });
+                setItemValues({ ...itemValues, [item]: newValue });
+            }
         } catch (error) {
-            console.error(`Error updating item value in ${collectionName} collection:`, error);
+            console.error(`Error updating/removing item in ${collectionName} collection:`, error);
         }
     };
 
     return (
-        <Box sx={{ width: "100%", height: "60vh", padding: "1rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1 }}>
+        <Box sx={{ width: "100%", height: "60vh", padding: "1rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1, gap: "3rem" }}>
             <Typography variant="h2" sx={{ textAlign: "center", fontSize: "2rem" }}>
                 <Input type="text" value={collectionName} onChange={(e) => setCollectionName(e.target.value)} />
             </Typography>
@@ -142,7 +152,7 @@ export default function ItemsTracker() {
                 </List>
             </Box>
 
-            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
                 <Input 
                     type="text" 
                     placeholder="Add item"
@@ -150,9 +160,9 @@ export default function ItemsTracker() {
                     onChange={handleChange}
                 />
 
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Button onClick={handleAddItem}>Add item</Button>
-                    <Button onClick={handleRemoveItem}>Remove item</Button>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
+                    <Button variant="contained" sx={{ backgroundColor: "green", color: "white" }} onClick={handleAddItem}>Add</Button>
+                    <Button variant="contained" sx={{ backgroundColor: "red", color: "white" }} onClick={handleRemoveItem}>Remove</Button>
                 </Box>
             </Box>
         </Box>           
