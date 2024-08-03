@@ -6,6 +6,8 @@ import { Analytics } from "@vercel/analytics/react";
 import { Container } from "@mui/material";
 import Header from "@/components/component/Header";
 
+import SessionWrapper from "@/components/component/SessionWrapper";
+
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -19,10 +21,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="pb-2">
       <body className={inter.className}>
-        <Header />
-        <Container sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>{children}</Container>
+        <SessionWrapper>
+          <Header />
+          <Container sx={{ display: "flex", flexDirection: "column", gap: "1rem" }}>{children}</Container>
+        </SessionWrapper>
       </body>
       <Analytics />
     </html>

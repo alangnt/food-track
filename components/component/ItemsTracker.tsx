@@ -1,9 +1,10 @@
 "use client"
 
-import { Box, Button, Input, List, Typography, ListItem, ListItemButton } from "@mui/material";
+import { Box, Button, Input, List, Typography, ListItem, ListItemButton, TextField } from "@mui/material";
 import { useState, useEffect } from "react";
 import { db } from "@/firebase.config";
-import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc, getDoc } from "firebase/firestore";
+import { useSession } from "next-auth/react";
 
 export default function ItemsTracker() {
     const [items, setItems] = useState<string[]>([]);
@@ -11,34 +12,55 @@ export default function ItemsTracker() {
     const [selectedItem, setSelectedItem] = useState<string | null>(null);
     const [itemValues, setItemValues] = useState<{ [key: string]: number }>({});
     const [collectionName, setCollectionName] = useState("items");
+    const [userEmail, setUserEmail] = useState<string | null>(null);
+    const [searchTerm, setSearchTerm] = useState("");
+    const { data: session } = useSession();
+
+    useEffect(() => {
+        if (session && session.user?.email) {
+            setUserEmail(session.user.email);
+            setCollectionName("items");
+        }
+    }, [session]);
 
     useEffect(() => {
         const fetchItems = async () => {
+            if (!userEmail) return;
+
             try {
-                const itemsCollection = collection(db, collectionName);
-                const itemsSnapshot = await getDocs(itemsCollection);
-                const itemsList: string[] = [];
-                const itemValuesList: { [key: string]: number } = {};
-        
-                if (itemsSnapshot.empty) {
-                    console.log(`The ${collectionName} collection is empty`);
+                const userListRef = doc(db, "userLists", userEmail);
+                const userListDoc = await getDoc(userListRef);
+
+                if (userListDoc.exists()) {
+                    const data = userListDoc.data();
+                    setItems(data.items || []);
+                    setItemValues(data.itemValues || {});
                 } else {
-                    itemsSnapshot.docs.forEach(doc => {
-                        const data = doc.data();
-                        itemsList.push(data.name);
-                        itemValuesList[data.name] = data.value || 1;
-                    });
+                    const itemsCollection = collection(db, collectionName);
+                    const itemsSnapshot = await getDocs(itemsCollection);
+                    const itemsList: string[] = [];
+                    const itemValuesList: { [key: string]: number } = {};
+            
+                    if (itemsSnapshot.empty) {
+                        console.log(`The ${collectionName} collection is empty`);
+                    } else {
+                        itemsSnapshot.docs.forEach(doc => {
+                            const data = doc.data();
+                            itemsList.push(data.name);
+                            itemValuesList[data.name] = data.value || 1;
+                        });
+                    }
+            
+                    setItems(itemsList);
+                    setItemValues(itemValuesList);
                 }
-        
-                setItems(itemsList);
-                setItemValues(itemValuesList);
             } catch (error) {
-                console.error(`Error fetching items from ${collectionName} collection:`, error);
+                console.error(`Error fetching items:`, error);
             }
         };
 
         fetchItems();
-    }, [collectionName]);
+    }, [collectionName, userEmail]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setNewItem(e.target.value);
@@ -99,14 +121,12 @@ export default function ItemsTracker() {
         try {
             const newValue = Math.max((itemValues[item] || 0) - 1, 0);
             if (newValue === 0) {
-                // Remove the item if its value reaches 0
                 await deleteDoc(doc(db, collectionName, item));
                 setItems(items.filter(i => i !== item));
                 const newItemValues = { ...itemValues };
                 delete newItemValues[item];
                 setItemValues(newItemValues);
             } else {
-                // Update the item's value if it's greater than 0
                 await updateDoc(doc(db, collectionName, item), { value: newValue });
                 setItemValues({ ...itemValues, [item]: newValue });
             }
@@ -115,36 +135,85 @@ export default function ItemsTracker() {
         }
     };
 
+    const handleSaveList = async () => {
+        if (!userEmail) {
+            console.log("User not logged in");
+            return;
+        }
+        try {
+            const userListRef = doc(db, "userLists", userEmail);
+            await setDoc(userListRef, { items: items, itemValues: itemValues });
+            console.log("List saved successfully");
+        } catch (error) {
+            console.error("Error saving list:", error);
+        }
+    };
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setSearchTerm(e.target.value);
+    };
+
+    const filteredItems = items.filter(item =>
+        item.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
     return (
-        <Box sx={{ width: "100%", height: "60vh", padding: "1rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1, gap: "3rem" }}>
+        <Box sx={{ width: "100%", padding: "1rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1, gap: "3rem" }}>
             <Typography variant="h2" sx={{ textAlign: "center", fontSize: "2rem" }}>
                 <Input type="text" value={collectionName} onChange={(e) => setCollectionName(e.target.value)} />
             </Typography>
 
+            <TextField
+                variant="outlined"
+                label="Search items"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                sx={{ mb: 2 }}
+            />
+
             <Box sx={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                 <List sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", maxHeight: "40vh", overflowY: "auto" }}>
-                    {items.map((item) => (
+                    {filteredItems.map((item) => (
                         <ListItem key={item} disablePadding>
                             <ListItemButton 
                                 onClick={() => handleItemClick(item)} 
                                 sx={{ 
-                                    display: "flex", 
+                                    display: "flex",
+                                    flexDirection: { xs: "column", md: "row" },
                                     alignItems: "center", 
-                                    justifyContent: "space-between", 
+                                    justifyContent: "center", 
                                     gap: "1rem",
                                     backgroundColor: selectedItem === item ? '#e0e0e0' : 'transparent',
                                 }}
                             >
-                                <Typography sx={{ width: "20%" }}>{item}</Typography>
-                                <input 
-                                    className="w-1/6 text-right"
-                                    type="number" 
-                                    value={itemValues[item] || 1}
-                                    readOnly
-                                />
+                                <Box sx={{ display: "flex", width: "100%", justifyContent: { xs: "center", md: "space-between" }, textAlign: { xs: "center", md: "left" } }}>
+                                    <Typography sx={{ width: { xs: "100%", md: "20%" } }}>{item}</Typography>
+                                </Box>
+
                                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                    <Button sx={{ color: "black" }} onClick={() => handleAddValue(item)}>+</Button>
-                                    <Button sx={{ color: "black" }} onClick={() => handleRemoveValue(item)}>-</Button>
+                                    <Typography 
+                                        component="span" 
+                                        sx={{ 
+                                            minWidth: '30px', 
+                                            textAlign: 'right', 
+                                            display: 'inline-block',
+                                            mr: 1
+                                        }}
+                                    >
+                                        {itemValues[item] || 1}
+                                    </Typography>   
+                                    
+                                    <select className="bg-transparent">
+                                        <option>pc</option>
+                                        <option>kg</option>
+                                        <option>lbs</option>
+                                        <option>grams</option>
+                                        <option>ml</option>
+                                        <option>l</option>
+                                    </select>
+                                
+                                    <Button sx={{ color: "black", fontSize: "1.3rem" }} onClick={() => handleAddValue(item)}>+</Button>
+                                    <Button sx={{ color: "black", fontSize: "1.3rem" }} onClick={() => handleRemoveValue(item)}>-</Button>
                                 </Box>
                             </ListItemButton>
                         </ListItem>
@@ -160,9 +229,19 @@ export default function ItemsTracker() {
                     onChange={handleChange}
                 />
 
-                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
-                    <Button variant="contained" sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} onClick={handleAddItem}>Add</Button>
-                    <Button variant="contained" sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} onClick={handleRemoveItem}>Remove</Button>
+                <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, alignItems: "center", justifyContent: "center", gap: "1rem" }}>
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
+                        <Button variant="contained" sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} onClick={handleAddItem}>Add</Button>
+                        <Button variant="contained" sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} onClick={handleRemoveItem}>Remove</Button>
+                    </Box>
+                    <Button 
+                        variant="contained" 
+                        sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} 
+                        onClick={handleSaveList}
+                        disabled={!userEmail}
+                    >
+                        Save List
+                    </Button>
                 </Box>
             </Box>
         </Box>           
