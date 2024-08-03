@@ -122,7 +122,7 @@ export default function ItemsTracker() {
             </Typography>
 
             <Box sx={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-                <List>
+                <List sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", maxHeight: "40vh", overflowY: "auto" }}>
                     {items.map((item) => (
                         <ListItem key={item} disablePadding>
                             <ListItemButton 
