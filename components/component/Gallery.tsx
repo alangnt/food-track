@@ -57,17 +57,17 @@ export default function Gallery() {
     }, [facingMode]);
 
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
             <h1>Gallery</h1>
-            <Button onClick={startCamera}>Start Camera</Button>
+            <Button onClick={startCamera} sx={{ color: "black", "&:hover": { backgroundColor: "black", color: "white" } }}>Start Camera</Button>
 
             <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                 <video ref={videoRef} autoPlay playsInline style={{ display: "block", marginTop: "1rem" }} />
                 {isCameraActive && (
                     <>
-                        <Button onClick={captureImage} style={{ marginTop: "1rem" }}>Take Picture</Button>
-                        <Button onClick={flipCamera}>Flip Camera</Button>
-                        <Button onClick={stopCamera}>Stop Camera</Button>
+                        <Button onClick={captureImage} style={{ marginTop: "1rem" }} sx={{ color: "black", "&:hover": { backgroundColor: "black", color: "white" } }}>Take Picture</Button>
+                        <Button onClick={flipCamera} sx={{ color: "black", "&:hover": { backgroundColor: "black", color: "white" } }}>Flip Camera</Button>
+                        <Button onClick={stopCamera} sx={{ color: "black", "&:hover": { backgroundColor: "black", color: "white" } }}>Stop Camera</Button>
                     </>
                 )}
             </Box>

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/react";
 
 import { Container } from "@mui/material";
+import Header from "@/components/component/Header";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -19,7 +20,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}><Container sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>{children}</Container></body>
+      <body className={inter.className}>
+        <Header />
+        <Container sx={{ height: "100vh", display: "flex", flexDirection: "column" }}>{children}</Container>
+      </body>
       <Analytics />
     </html>
   );

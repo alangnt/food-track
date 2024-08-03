@@ -142,9 +142,9 @@ export default function ItemsTracker() {
                                     value={itemValues[item] || 1}
                                     readOnly
                                 />
-                                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
-                                    <Button variant="contained" sx={{ backgroundColor: "green", color: "white" }} onClick={() => handleAddValue(item)}>+</Button>
-                                    <Button variant="contained" sx={{ backgroundColor: "red", color: "white" }} onClick={() => handleRemoveValue(item)}>-</Button>
+                                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                    <Button sx={{ color: "black" }} onClick={() => handleAddValue(item)}>+</Button>
+                                    <Button sx={{ color: "black" }} onClick={() => handleRemoveValue(item)}>-</Button>
                                 </Box>
                             </ListItemButton>
                         </ListItem>
@@ -161,8 +161,8 @@ export default function ItemsTracker() {
                 />
 
                 <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
-                    <Button variant="contained" sx={{ backgroundColor: "green", color: "white" }} onClick={handleAddItem}>Add</Button>
-                    <Button variant="contained" sx={{ backgroundColor: "red", color: "white" }} onClick={handleRemoveItem}>Remove</Button>
+                    <Button variant="contained" sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} onClick={handleAddItem}>Add</Button>
+                    <Button variant="contained" sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} onClick={handleRemoveItem}>Remove</Button>
                 </Box>
             </Box>
         </Box>           
