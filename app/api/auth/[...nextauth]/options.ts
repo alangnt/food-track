@@ -15,18 +15,24 @@ export const authOptions: NextAuthOptions = {
                 throw new Error("Email and password required");
               }
               
-              const res = await fetch(`${process.env.NEXTAUTH_URL}/api/auth/login`, {
-                method: 'POST',
-                body: JSON.stringify(credentials),
-                headers: { "Content-Type": "application/json" }
-              });
-          
-              if (res.ok) {
-                const user = await res.json();
-                return user;
-              } else {
-                console.error('Login failed:', await res.text());
-                return null;
+              try {
+                const res = await fetch(`${process.env.NEXTAUTH_URL}/api/auth/login`, {
+                  method: 'POST',
+                  body: JSON.stringify(credentials),
+                  headers: { "Content-Type": "application/json" }
+                });
+            
+                if (res.ok) {
+                  const user = await res.json();
+                  return user;
+                } else {
+                  const errorText = await res.text();
+                  console.error('Login failed:', errorText);
+                  throw new Error(errorText || 'Login failed');
+                }
+              } catch (error) {
+                console.error('Authorization error:', error);
+                throw new Error('An error occurred during authentication');
               }
             }
         })
