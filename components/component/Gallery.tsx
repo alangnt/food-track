@@ -390,7 +390,13 @@ export default function Gallery() {
                     throw new Error(result.error || 'Failed to submit label');
                 }
                 alert("Label submitted successfully!");
+                // Update both predictions and userLabels
                 setPredictions(prev => ({ ...prev, [imageId]: userLabels[imageId] }));
+                setUserLabels(prev => ({ ...prev, [imageId]: userLabels[imageId] }));
+                // Update the image in the images state
+                setImages(prev => prev.map(img => 
+                    img.id === imageId ? { ...img, userLabel: userLabels[imageId] } : img
+                ));
             } else {
                 const text = await response.text();
                 throw new Error(`Unexpected response: ${text}`);
