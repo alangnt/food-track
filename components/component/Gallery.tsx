@@ -1,29 +1,40 @@
 "use client"
 
-import { Box, Button, Grid, IconButton, Modal } from "@mui/material";
+import { Box, Button, Grid, IconButton, Modal, TextField, Chip } from "@mui/material";
 import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import * as tf from '@tensorflow/tfjs';
+import * as mobilenet from '@tensorflow-models/mobilenet';
 
 interface SavedImage {
   id: number;
   url: string;
+  userLabel?: string;
 }
 
 interface ZoomedImageModalProps {
   image: SavedImage | null;
   isOpen: boolean;
   onClose: () => void;
+  prediction: string | null;
+  userLabel: string | null;
+  onUserLabelChange: (label: string) => void;
+  onUserLabelSubmit: () => void;
 }
 
-const ZoomedImageModal: React.FC<ZoomedImageModalProps> = ({ image, isOpen, onClose }) => {
-  const [zoomLevel, setZoomLevel] = useState(1);
-
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.5, 3));
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.5, 1));
+const ZoomedImageModal: React.FC<ZoomedImageModalProps> = ({ 
+  image, 
+  isOpen, 
+  onClose, 
+  prediction, 
+  userLabel, 
+  onUserLabelChange, 
+  onUserLabelSubmit 
+}) => {
 
   return (
     <Modal open={isOpen} onClose={onClose}>
@@ -41,34 +52,74 @@ const ZoomedImageModal: React.FC<ZoomedImageModalProps> = ({ image, isOpen, onCl
       }}>
         <IconButton
           onClick={onClose}
-          sx={{ position: 'absolute', right: 8, top: 8 }}
+          sx={{ position: 'absolute', right: 0, top: 0 }}
         >
           <CloseIcon />
         </IconButton>
-        <IconButton
-          onClick={handleZoomIn}
-          sx={{ position: 'absolute', right: 8, bottom: 8 }}
-        >
-          <ZoomInIcon />
-        </IconButton>
-        <IconButton
-          onClick={handleZoomOut}
-          sx={{ position: 'absolute', right: 48, bottom: 8 }}
-        >
-          <ZoomOutIcon />
-        </IconButton>
         {image && (
-          <img
-            src={image.url}
-            alt={`Zoomed Image ${image.id}`}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              transform: `scale(${zoomLevel})`,
-              transition: 'transform 0.2s',
-            }}
-          />
+          <>
+            <img
+              src={image.url}
+              alt={`Zoomed Image ${image.id}`}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain',
+                transition: 'transform 0.2s',
+              }}
+            />
+            <Box sx={{
+              position: 'absolute',
+              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+              padding: '1rem',
+              borderRadius: '4px',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '80%',
+              gap: '8px',
+            }}>
+              {prediction && (
+                <Chip 
+                label={`${prediction}`} 
+                size="small" 
+                color="primary"
+                sx={{ 
+                    maxWidth: '100%',
+                    height: 'auto',
+                    '& .MuiChip-label': {
+                        display: 'block',
+                        whiteSpace: 'normal',
+                        wordBreak: 'break-word',
+                        padding: '0.7rem',
+                    },
+                    borderRadius: '4px'
+                }}
+            />
+              )}
+              <TextField
+                size="small"
+                placeholder="Enter your label"
+                value={userLabel || ''}
+                onChange={(e) => onUserLabelChange(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    onUserLabelSubmit();
+                  }
+                }}
+                sx={{ width: { xs: '100%', sm: '70%' } }}
+              />
+              <Button 
+                onClick={onUserLabelSubmit}
+                variant="contained" 
+                size="small"
+                sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+              >
+                Submit
+              </Button>
+            </Box>
+          </>
         )}
       </Box>
     </Modal>
@@ -85,6 +136,9 @@ export default function Gallery() {
     const [isDeleting, setIsDeleting] = useState(false);
     const [zoomedImage, setZoomedImage] = useState<SavedImage | null>(null);
     const [isZoomed, setIsZoomed] = useState(false);
+    const [model, setModel] = useState<mobilenet.MobileNet | null>(null);
+    const [predictions, setPredictions] = useState<{[key: number]: string}>({});
+    const [userLabels, setUserLabels] = useState<{[key: number]: string}>({});
 
     const startCamera = async () => {
         try {
@@ -119,7 +173,7 @@ export default function Gallery() {
             canvas.getContext("2d")?.drawImage(videoRef.current, 0, 0);
             const newImageUrl = canvas.toDataURL("image/jpeg");
             const newImage: SavedImage = {
-                id: Date.now(), // Temporary ID, will be replaced when saved to database
+                id: Date.now(),
                 url: newImageUrl
             };
             setImages(prevImages => [...prevImages, newImage]);
@@ -145,7 +199,7 @@ export default function Gallery() {
                 },
                 body: JSON.stringify({ 
                     images: images
-                        .filter(img => !img.id || img.id > Date.now() - 1000 * 60 * 60) // Only send new images
+                        .filter(img => !img.id || img.id > Date.now() - 1000 * 60 * 60)
                         .map(img => img.url)
                 }),
             });
@@ -232,11 +286,21 @@ export default function Gallery() {
         if (session && session.user) {
             fetchSavedImages();
         }
+        loadModel();
     }, [session]);
+
+    useEffect(() => {
+        if (model) {
+            images.forEach(image => {
+                if (!predictions[image.id]) {
+                    detectImage(image);
+                }
+            });
+        }
+    }, [images, model]);
 
     const fetchSavedImages = async () => {
         if (!session || !session.user) {
-            console.log("User not signed in. Cannot fetch images.");
             return;
         }
     
@@ -246,7 +310,6 @@ export default function Gallery() {
                 throw new Error(`Failed to fetch images: ${response.status} ${response.statusText}`);
             }
             const savedImages: SavedImage[] = await response.json();
-            console.log('Fetched images:', savedImages);
             setImages(savedImages);
         } catch (error) {
             console.error('Error fetching images:', error);
@@ -254,14 +317,88 @@ export default function Gallery() {
         }
     };
 
+    const loadModel = async () => {
+        try {
+            const loadedModel = await mobilenet.load();
+            setModel(loadedModel);
+        } catch (error) {
+            console.error('Failed to load MobileNet model:', error);
+        }
+    };
+
+    const detectImage = async (image: SavedImage) => {
+        if (!model) {
+            return;
+        }
+
+        try {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.src = image.url;
+            await img.decode();
+
+            const tfImg = tf.browser.fromPixels(img);
+            const result = await model.classify(tfImg);
+            const topPrediction = result[0].className;
+            
+            setPredictions(prev => ({ ...prev, [image.id]: topPrediction }));
+            tfImg.dispose();
+        } catch (error) {
+            console.error('Error during image detection:', error);
+        }
+    };
+
     const handleImageClick = (image: SavedImage) => {
         setZoomedImage(image);
         setIsZoomed(true);
+        if (!predictions[image.id]) {
+            detectImage(image);
+        }
     };
 
     const handleCloseZoom = () => {
         setIsZoomed(false);
         setZoomedImage(null);
+    };
+
+    const handleUserLabelChange = (imageId: number, label: string) => {
+        setUserLabels(prev => ({ ...prev, [imageId]: label }));
+    };
+
+    const submitUserLabel = async (imageId: number) => {
+        if (!session || !session.user) {
+            alert("Please sign in to submit labels.");
+            return;
+        }
+    
+        try {
+            const response = await fetch('/api/submit-label', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    imageId,
+                    label: userLabels[imageId],
+                }),
+            });
+    
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to submit label');
+                }
+                alert("Label submitted successfully!");
+                setPredictions(prev => ({ ...prev, [imageId]: userLabels[imageId] }));
+            } else {
+                const text = await response.text();
+                throw new Error(`Unexpected response: ${text}`);
+            }
+        } catch (error) {
+            console.error('Error submitting label:', error);
+            alert(`Failed to submit label. ${error instanceof Error ? error.message : 'Please try again.'}`);
+        }
     };
 
     return (
@@ -323,6 +460,39 @@ export default function Gallery() {
                             >
                                 <DeleteIcon />
                             </IconButton>
+                            {predictions[image.id] && (
+                                <Box sx={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    left: 0,
+                                    right: 0,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                    padding: '4px',
+                                    fontSize: '12px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                }}>
+                                    <Chip 
+                                        label={`${predictions[image.id]}`} 
+                                        size="small" 
+                                        color="primary"
+                                    />
+                                    <TextField
+                                        size="small"
+                                        placeholder="Your label"
+                                        value={userLabels[image.id] || ''}
+                                        onChange={(e) => handleUserLabelChange(image.id, e.target.value)}
+                                        onKeyPress={(e) => {
+                                            if (e.key === 'Enter') {
+                                                submitUserLabel(image.id);
+                                            }
+                                        }}
+                                    />
+                                </Box>
+                            )}
                         </Box>
                     </Grid>
                 ))}
@@ -360,6 +530,10 @@ export default function Gallery() {
                 image={zoomedImage}
                 isOpen={isZoomed}
                 onClose={handleCloseZoom}
+                prediction={zoomedImage ? predictions[zoomedImage.id] : null}
+                userLabel={zoomedImage ? userLabels[zoomedImage.id] : null}
+                onUserLabelChange={(label) => zoomedImage && handleUserLabelChange(zoomedImage.id, label)}
+                onUserLabelSubmit={() => zoomedImage && submitUserLabel(zoomedImage.id)}
             />
         </Box>
     );

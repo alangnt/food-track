@@ -19,12 +19,15 @@ export async function POST(req: NextRequest) {
 
         const client = await pool.connect();
         try {
+            await client.query('BEGIN');
+
             const userResult = await client.query(
                 'SELECT id FROM users_ptracker WHERE email = $1',
                 [session.user.email]
             );
 
             if (userResult.rows.length === 0) {
+                await client.query('ROLLBACK');
                 return NextResponse.json({ error: 'User not found' }, { status: 404 });
             }
 
@@ -39,9 +42,14 @@ export async function POST(req: NextRequest) {
                 savedImages.push(result.rows[0]);
             }
 
+            await client.query('COMMIT');
+
             console.log('Saved images:', savedImages); // Log saved images
 
             return NextResponse.json({ message: 'Images saved successfully', savedImages });
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
         } finally {
             client.release();
         }

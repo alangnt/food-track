@@ -159,17 +159,21 @@ export default function ItemsTracker() {
 
     return (
         <Box sx={{ width: "100%", padding: "1rem", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexGrow: 1, gap: "3rem" }}>
-            <Typography variant="h2" sx={{ textAlign: "center", fontSize: "2rem" }}>
-                <Input type="text" value={collectionName} onChange={(e) => setCollectionName(e.target.value)} />
-            </Typography>
+            <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, alignItems: "center", justifyContent: "center", gap: "1rem" }}>
+                <Input type="text" 
+                    value={collectionName} 
+                    placeholder="List name"
+                    onChange={(e) => setCollectionName(e.target.value)} 
+                    sx={{ textAlign: "center" }}
+                />
 
-            <TextField
-                variant="outlined"
-                label="Search items"
-                value={searchTerm}
-                onChange={handleSearchChange}
-                sx={{ mb: 2 }}
-            />
+                <Input
+                    type="text"
+                    placeholder="Search items"
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                />
+            </Box>
 
             <Box sx={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
                 <List sx={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", maxHeight: "40vh", overflowY: "auto" }}>
@@ -184,6 +188,8 @@ export default function ItemsTracker() {
                                     justifyContent: "center", 
                                     gap: "1rem",
                                     backgroundColor: selectedItem === item ? '#e0e0e0' : 'transparent',
+                                    margin: "0.2rem",
+                                    borderBlock: { xs: "1px solid #e0e0e0", md: "none" },
                                 }}
                             >
                                 <Box sx={{ display: "flex", width: "100%", justifyContent: { xs: "center", md: "space-between" }, textAlign: { xs: "center", md: "left" } }}>
@@ -231,12 +237,12 @@ export default function ItemsTracker() {
 
                 <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, alignItems: "center", justifyContent: "center", gap: "1rem" }}>
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem" }}>
-                        <Button variant="contained" sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} onClick={handleAddItem}>Add</Button>
-                        <Button variant="contained" sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} onClick={handleRemoveItem}>Remove</Button>
+                        <Button variant="contained" sx={{ backgroundColor: "black", color: "white", "&:hover": { backgroundColor: "white", color: "black" } }} onClick={handleAddItem}>Add</Button>
+                        <Button variant="contained" sx={{ backgroundColor: "black", color: "white", "&:hover": { backgroundColor: "white", color: "black" } }} onClick={handleRemoveItem}>Remove</Button>
                     </Box>
                     <Button 
                         variant="contained" 
-                        sx={{ backgroundColor: "white", color: "black", "&:hover": { backgroundColor: "black", color: "white" } }} 
+                        sx={{ backgroundColor: "black", color: "white", "&:hover": { backgroundColor: "white", color: "black" } }} 
                         onClick={handleSaveList}
                         disabled={!userEmail}
                     >

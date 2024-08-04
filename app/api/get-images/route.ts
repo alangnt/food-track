@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
         const client = await pool.connect();
         try {
             const result = await client.query(
-                'SELECT id, url FROM images WHERE user_id = (SELECT id FROM users_ptracker WHERE email = $1)',
+                'SELECT id, url FROM images WHERE user_id = (SELECT id FROM users_ptracker WHERE email = $1) ORDER BY created_at DESC',
                 [session.user.email]
             );
 
