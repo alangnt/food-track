@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
         }
 
         const { images } = await req.json();
-        console.log('Received images:', images); // Log received images
+        console.log('Received images:', images);
 
         if (!Array.isArray(images)) {
             return NextResponse.json({ error: 'Invalid image data' }, { status: 400 });
@@ -41,23 +41,29 @@ export async function POST(req: NextRequest) {
             }
 
             const userId = userResult.rows[0].id;
+            console.log('User ID:', userId);
 
             const savedImages = [];
             for (const imageData of images) {
-                const { url, label } = imageData as ImageData;
+                console.log('Processing image:', imageData);
+                const url = typeof imageData === 'string' ? imageData : imageData.url;
+                const label = typeof imageData === 'object' ? imageData.label : null;
+                
                 const result = await client.query(
                     'INSERT INTO images (user_id, url, user_label) VALUES ($1, $2, $3) RETURNING id, url, user_label',
-                    [userId, url, label || null]
+                    [userId, url, label]
                 );
+                console.log('Inserted image:', result.rows[0]);
                 savedImages.push(result.rows[0]);
             }
 
             await client.query('COMMIT');
 
-            console.log('Saved images:', savedImages); // Log saved images
+            console.log('Saved images:', savedImages);
 
             return NextResponse.json({ message: 'Images saved successfully', savedImages });
         } catch (error) {
+            console.error('Database error:', error);
             await client.query('ROLLBACK');
             throw error;
         } finally {
@@ -65,6 +71,7 @@ export async function POST(req: NextRequest) {
         }
     } catch (error) {
         console.error('Error saving images:', error);
-        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        return NextResponse.json({ error: 'Internal server error', details: errorMessage }, { status: 500 });
     }
 }

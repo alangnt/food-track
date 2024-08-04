@@ -50,16 +50,17 @@ export async function GET(req: NextRequest) {
         const client = await pool.connect();
         try {
             const result = await client.query(
-                'SELECT id, url FROM images WHERE user_id = (SELECT id FROM users_ptracker WHERE email = $1) ORDER BY created_at DESC',
+                'SELECT id, url, user_label FROM images WHERE user_id = (SELECT id FROM users_ptracker WHERE email = $1) ORDER BY created_at DESC',
                 [session.user.email]
             );
 
             const sanitizedImages = result.rows.map(row => ({
                 id: row.id,
-                url: sanitizeUrl(row.url)
+                url: sanitizeUrl(row.url),
+                userLabel: row.user_label // Include the user_label in the response
             }));
 
-            console.log('Sanitized images:', sanitizedImages);
+            console.log('Sanitized images with labels:', sanitizedImages);
 
             return NextResponse.json(sanitizedImages);
         } finally {

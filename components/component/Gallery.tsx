@@ -5,8 +5,6 @@ import { useState, useRef, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import DeleteIcon from '@mui/icons-material/Delete';
 import CloseIcon from '@mui/icons-material/Close';
-import ZoomInIcon from '@mui/icons-material/ZoomIn';
-import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import * as tf from '@tensorflow/tfjs';
 import * as mobilenet from '@tensorflow-models/mobilenet';
 
@@ -35,7 +33,6 @@ const ZoomedImageModal: React.FC<ZoomedImageModalProps> = ({
   onUserLabelChange, 
   onUserLabelSubmit 
 }) => {
-
   return (
     <Modal open={isOpen} onClose={onClose}>
       <Box sx={{
@@ -80,23 +77,23 @@ const ZoomedImageModal: React.FC<ZoomedImageModalProps> = ({
               width: '80%',
               gap: '8px',
             }}>
-              {prediction && (
+              {(userLabel || prediction) && (
                 <Chip 
-                label={`${prediction}`} 
-                size="small" 
-                color="primary"
-                sx={{ 
+                  label={userLabel || prediction || ''}
+                  size="small" 
+                  color={userLabel ? "secondary" : "primary"}
+                  sx={{ 
                     maxWidth: '100%',
                     height: 'auto',
                     '& .MuiChip-label': {
-                        display: 'block',
-                        whiteSpace: 'normal',
-                        wordBreak: 'break-word',
-                        padding: '0.7rem',
+                      display: 'block',
+                      whiteSpace: 'normal',
+                      wordBreak: 'break-word',
+                      padding: '0.7rem',
                     },
                     borderRadius: '4px'
-                }}
-            />
+                  }}
+                />
               )}
               <TextField
                 size="small"
@@ -192,27 +189,34 @@ export default function Gallery() {
     
         setIsSaving(true);
         try {
+            const imagesToSave = images
+                .filter(img => !img.id || img.id > Date.now() - 1000 * 60 * 60)
+                .map(img => img.url);
+    
+            console.log('Attempting to save images:', imagesToSave);
+    
             const response = await fetch('/api/save-images', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ 
-                    images: images
-                        .filter(img => !img.id || img.id > Date.now() - 1000 * 60 * 60)
-                        .map(img => img.url)
-                }),
+                body: JSON.stringify({ images: imagesToSave }),
             });
     
             if (!response.ok) {
-                throw new Error('Failed to save images');
+                const errorData = await response.text();
+                console.error('Server responded with an error:', response.status, errorData);
+                throw new Error(`Server error: ${errorData || 'Unknown error'}`);
             }
-            
+    
+            const result = await response.json();
+            console.log('Save images response:', result);
+    
             alert("Images saved successfully!");
             await fetchSavedImages();
         } catch (error) {
             console.error('Error saving images:', error);
-            alert('Failed to save images. Please try again.');
+            alert(`Failed to save images. ${error instanceof Error ? error.message : 'Please try again.'}`);
         } finally {
             setIsSaving(false);
         }
@@ -310,7 +314,18 @@ export default function Gallery() {
                 throw new Error(`Failed to fetch images: ${response.status} ${response.statusText}`);
             }
             const savedImages: SavedImage[] = await response.json();
+            console.log('Fetched saved images:', savedImages);
             setImages(savedImages);
+            
+            // Update userLabels state with fetched labels
+            const fetchedLabels = savedImages.reduce((acc, img) => {
+                if (img.userLabel) {
+                    acc[img.id] = img.userLabel;
+                }
+                return acc;
+            }, {} as {[key: number]: string});
+            console.log('Fetched user labels:', fetchedLabels);
+            setUserLabels(fetchedLabels);
         } catch (error) {
             console.error('Error fetching images:', error);
             alert('Failed to fetch saved images. Please try again.');
@@ -383,24 +398,24 @@ export default function Gallery() {
                 }),
             });
     
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.indexOf("application/json") !== -1) {
+            if (!response.ok) {
                 const result = await response.json();
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to submit label');
-                }
-                alert("Label submitted successfully!");
-                // Update both predictions and userLabels
-                setPredictions(prev => ({ ...prev, [imageId]: userLabels[imageId] }));
-                setUserLabels(prev => ({ ...prev, [imageId]: userLabels[imageId] }));
-                // Update the image in the images state
-                setImages(prev => prev.map(img => 
-                    img.id === imageId ? { ...img, userLabel: userLabels[imageId] } : img
-                ));
-            } else {
-                const text = await response.text();
-                throw new Error(`Unexpected response: ${text}`);
+                throw new Error(result.error || 'Failed to submit label');
             }
+    
+            const updatedImage = await response.json();
+            console.log('Label submission response:', updatedImage);
+            
+            // Update local state
+            setImages(prev => prev.map(img => 
+                img.id === imageId ? { ...img, userLabel: updatedImage.userLabel } : img
+            ));
+            setUserLabels(prev => ({ ...prev, [imageId]: updatedImage.userLabel }));
+    
+            // Refetch images to ensure we have the latest data
+            await fetchSavedImages();
+    
+            alert("Label submitted successfully!");
         } catch (error) {
             console.error('Error submitting label:', error);
             alert(`Failed to submit label. ${error instanceof Error ? error.message : 'Please try again.'}`);
@@ -452,95 +467,95 @@ export default function Gallery() {
                                 }}
                             />
                             <IconButton
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    deleteImage(image.id);
-                                }}
-                                sx={{
-                                    position: 'absolute',
-                                    top: 5,
-                                    right: 5,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-                                    '&:hover': { backgroundColor: 'rgba(255, 0, 0, 0.7)' }
-                                }}
-                            >
-                                <DeleteIcon />
-                            </IconButton>
-                            {predictions[image.id] && (
-                                <Box sx={{
-                                    position: 'absolute',
-                                    bottom: 0,
-                                    left: 0,
-                                    right: 0,
-                                    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-                                    padding: '4px',
-                                    fontSize: '12px',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    gap: '8px',
-                                }}>
-                                    <Chip 
-                                        label={`${predictions[image.id]}`} 
-                                        size="small" 
-                                        color="primary"
-                                    />
-                                    <TextField
-                                        size="small"
-                                        placeholder="Your label"
-                                        value={userLabels[image.id] || ''}
-                                        onChange={(e) => handleUserLabelChange(image.id, e.target.value)}
-                                        onKeyPress={(e) => {
-                                            if (e.key === 'Enter') {
-                                                submitUserLabel(image.id);
-                                            }
+                                               onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteImage(image.id);
+                                            }}
+                                            sx={{
+                                                position: 'absolute',
+                                                top: 5,
+                                                right: 5,
+                                                backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                                                '&:hover': { backgroundColor: 'rgba(255, 0, 0, 0.7)' }
+                                            }}
+                                        >
+                                            <DeleteIcon />
+                                        </IconButton>
+                                        {(image.userLabel || predictions[image.id]) && (
+                                            <Box sx={{
+                                                position: 'absolute',
+                                                bottom: 0,
+                                                left: 0,
+                                                right: 0,
+                                                backgroundColor: 'rgba(255, 255, 255, 0.8)',
+                                                padding: '4px',
+                                                fontSize: '12px',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                            }}>
+                                                <Chip 
+                                                    label={image.userLabel || predictions[image.id]}
+                                                    size="small" 
+                                                    color={image.userLabel ? "secondary" : "primary"}
+                                                />
+                                                <TextField
+                                                    size="small"
+                                                    placeholder="Your label"
+                                                    value={userLabels[image.id] || image.userLabel || ''}
+                                                    onChange={(e) => handleUserLabelChange(image.id, e.target.value)}
+                                                    onKeyPress={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            submitUserLabel(image.id);
+                                                        }
+                                                    }}
+                                                />
+                                            </Box>
+                                        )}
+                                    </Box>
+                                </Grid>
+                                ))}
+                            </Grid>
+                            
+                            <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, alignItems: "center", justifyContent: "center", gap: "1rem", marginTop: "1rem" }}>
+                                {images.length > 0 && (
+                                    <Button 
+                                        onClick={saveImages} 
+                                        disabled={isSaving}
+                                        sx={{ 
+                                            color: "black", 
+                                            "&:hover": { backgroundColor: "black", color: "white" }
                                         }}
-                                    />
-                                </Box>
-                            )}
-                        </Box>
-                    </Grid>
-                ))}
-            </Grid>
-
-            <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, alignItems: "center", justifyContent: "center", gap: "1rem", marginTop: "1rem" }}>
-                {images.length > 0 && (
-                    <Button 
-                        onClick={saveImages} 
-                        disabled={isSaving}
-                        sx={{ 
-                            color: "black", 
-                            "&:hover": { backgroundColor: "black", color: "white" }
-                        }}
-                    >
-                        {isSaving ? 'Saving...' : 'Save Images'}
-                    </Button>
-                )}
-                {images.length > 0 && (
-                    <Button 
-                        onClick={deleteAllImages} 
-                        disabled={isDeleting}
-                        sx={{ 
-                            color: "white", 
-                            backgroundColor: "red",
-                            "&:hover": { backgroundColor: "darkred" }
-                        }}
-                    >
-                        {isDeleting ? 'Deleting...' : 'Delete All Images'}
-                    </Button>
-                )}
-            </Box>
-
-            <ZoomedImageModal
-                image={zoomedImage}
-                isOpen={isZoomed}
-                onClose={handleCloseZoom}
-                prediction={zoomedImage ? predictions[zoomedImage.id] : null}
-                userLabel={zoomedImage ? userLabels[zoomedImage.id] : null}
-                onUserLabelChange={(label) => zoomedImage && handleUserLabelChange(zoomedImage.id, label)}
-                onUserLabelSubmit={() => zoomedImage && submitUserLabel(zoomedImage.id)}
-            />
-        </Box>
-    );
+                                    >
+                                        {isSaving ? 'Saving...' : 'Save Images'}
+                                    </Button>
+                                )}
+                                {images.length > 0 && (
+                                    <Button 
+                                        onClick={deleteAllImages} 
+                                        disabled={isDeleting}
+                                        sx={{ 
+                                            color: "white", 
+                                            backgroundColor: "red",
+                                            "&:hover": { backgroundColor: "darkred" }
+                                        }}
+                                    >
+                                        {isDeleting ? 'Deleting...' : 'Delete All Images'}
+                                    </Button>
+                                )}
+                            </Box>
+                            
+                            <ZoomedImageModal
+                                image={zoomedImage}
+                                isOpen={isZoomed}
+                                onClose={handleCloseZoom}
+                                prediction={zoomedImage ? predictions[zoomedImage.id] : null}
+                                userLabel={zoomedImage ? (zoomedImage.userLabel || userLabels[zoomedImage.id]) : null}
+                                onUserLabelChange={(label) => zoomedImage && handleUserLabelChange(zoomedImage.id, label)}
+                                onUserLabelSubmit={() => zoomedImage && submitUserLabel(zoomedImage.id)}
+                            />
+                            </Box>
+                            );
 }
