@@ -7,6 +7,11 @@ const pool = new Pool({
   connectionString: process.env.POSTGRES_URL,
 });
 
+interface ImageData {
+    url: string;
+    label?: string;
+}
+
 export async function POST(req: NextRequest) {
     try {
         const session = await getServerSession(authOptions);
@@ -16,6 +21,10 @@ export async function POST(req: NextRequest) {
 
         const { images } = await req.json();
         console.log('Received images:', images); // Log received images
+
+        if (!Array.isArray(images)) {
+            return NextResponse.json({ error: 'Invalid image data' }, { status: 400 });
+        }
 
         const client = await pool.connect();
         try {
@@ -34,10 +43,11 @@ export async function POST(req: NextRequest) {
             const userId = userResult.rows[0].id;
 
             const savedImages = [];
-            for (const imageUrl of images) {
+            for (const imageData of images) {
+                const { url, label } = imageData as ImageData;
                 const result = await client.query(
-                    'INSERT INTO images (user_id, url) VALUES ($1, $2) RETURNING id, url',
-                    [userId, imageUrl]
+                    'INSERT INTO images (user_id, url, user_label) VALUES ($1, $2, $3) RETURNING id, url, user_label',
+                    [userId, url, label || null]
                 );
                 savedImages.push(result.rows[0]);
             }
